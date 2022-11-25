@@ -1,6 +1,7 @@
 const express = require('express')
 const app = express()
 const cors = require('cors')
+const port = process.env.PORT || 3001
 
 let users = [];
 
@@ -67,5 +68,5 @@ app.post("/login", async (req, res) => {
 
 })
 
-app.listen(3000);
-console.log("app running at http://localhost:3000");
+app.listen(port);
+console.log(`app running at http://localhost:${port}`);
