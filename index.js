@@ -1,72 +1,130 @@
-const express = require('express')
-const app = express()
+const express = require('express');
+const fs = require('fs/promises');
 const cors = require('cors')
-const port = process.env.PORT || 3001
+const { MongoClient } = require('mongodb');
+const config = require('./config.json');
 
-let users = [];
+//Create the mongo client to use
+const client = new MongoClient(config.finalUrl);
 
-app.use(express.urlencoded({
-    extended: false
-}));
+const app = express();
+const port = process.env.port || 1337;
+
+app.use(express.static('public'));
+app.use(express.json());
 app.use(cors())
-app.use(express.json())
 
-app.post('/register', async (req, res) => {
-    try {
-        // making a user //
-        let user = {
-            username: req.body.username,
-            email: req.body.email,
-            password: req.body.password
-        }
+//Root route
+app.get('/', (req, res) => {
+    res.status(300).redirect('/info.html');
+});
 
-        //validation//
-        if (!user.password || !user.username || !user.email) {
-            res.status(404).send('fields are not filled in, try again')
-        }
+// Return all boardgames from the database
+app.get('/boardgames', async (req, res) =>{
 
-        // push user in the users array// 
-        users.push(user)
-        console.log(users)
+    try{
+        //connect to the db
+        await client.connect();
 
-        // respons //
-        res.send("The user has been added to a global variable!")
+        //retrieve the boardgame collection data
+        const colli = client.db('session5').collection('boardgames');
+        const bgs = await colli.find({}).toArray();
 
-    } catch (error) {
-        console.log(error), res.send("did not work")
-    }
-
-})
-
-app.post("/login", async (req, res) => {
-    try {
-        //bestaande user ophalen///
-        let user = users.find(u => {
-            return u.email == req.body.email
-        })
-        console.log(users)
-        //Als user gevonden is, vergelijk password
-        if(user){
-            //compare password
-            if(user.password == req.body.password){
-                res.status(200).send({message:"you are logged in "})
-            }else{
-                res.status(400).send({message:"wrong pasword"}) 
-            }
-        }else{
-            res.status(400).send({message: "The user does not exist (Email not found)"})
-        }
-
-
-
-    } catch (err) {
+        //Send back the data with the response
+        res.status(200).send(bgs);
+    }catch(error){
+        console.log(error)
         res.status(500).send({
-            status: "Tis kapot",
-            error: err.message
-        })
+            error: 'Something went wrong',
+            value: error
+        });
+    }finally {
+        await client.close();
+    }
+});
+
+// /boardgame?id=1234
+app.get('/boardgame', async (req,res) => {
+    //id is located in the query: req.query.id
+    try{
+        //connect to the db
+        await client.connect();
+
+        //retrieve the boardgame collection data
+        const colli = client.db('session5').collection('boardgames');
+
+        //only look for a bg with this ID
+        const query = { bggid: req.query.id };
+
+        const bg = await colli.findOne(query);
+
+        if(bg){
+            //Send back the file
+            res.status(200).send(bg);
+            return;
+        }else{
+            res.status(400).send('Boardgame could not be found with id: ' + req.query.id);
+        }
+      
+    }catch(error){
+        console.log(error);
+        res.status(500).send({
+            error: 'Something went wrong',
+            value: error
+        });
+    }finally {
+        await client.close();
+    }
+});
+
+// save a boardgame
+app.post('/saveBoardgame', async (req, res) => {
+
+    if(!req.body.bggid || !req.body.name || !req.body.genre || !req.body.mechanisms
+        || !req.body.description){
+        res.status(400).send('Bad request: missing id, name, genre, mechanisms or description');
+        return;
     }
 
-})
+    try{
+        //connect to the db
+        await client.connect();
 
-app.listen(port);
-console.log(`app running at http://localhost:${port}`);
+        //retrieve the boardgame collection data
+        const colli = client.db('session5').collection('boardgames');
+
+        // Validation for double boardgames
+        const bg = await colli.findOne({bggid: req.body.bggid});
+        if(bg){
+            res.status(400).send('Bad request: boardgame already exists with bggid ' + req.body.bggid);
+            return;
+        } 
+        // Create the new boardgame object
+        let newBoardgame = {
+            bggid: req.body.bggid,
+            name: req.body.name,
+            genre: req.body.genre,
+            mechanisms: req.body.mechanisms,
+            description: req.body.description
+        }
+        
+        // Insert into the database
+        let insertResult = await colli.insertOne(newBoardgame);
+
+        //Send back successmessage
+        res.status(201).send(`Boardgame succesfully saved with id ${req.body.bggid}`);
+        return;
+    }catch(error){
+        console.log(error);
+        res.status(500).send({
+            error: 'Something went wrong',
+            value: error
+        });
+    }finally {
+        await client.close();
+    }
+});
+
+app.listen(port, () => {
+    console.log(`API is running at http://localhost:${port}`);
+})
