@@ -1,7 +1,0 @@
-{
-    "baseUrl": "mongodb+srv://<username>:<password>@cluster0.nwqwf.mongodb.net/<db>?retryWrites=true&w=majority",
-    "username": "admin",
-    "pw": "admin",
-    "db": "session5",
-    "finalUrl": "mongodb+srv://admin:admin@cluster0.nwqwf.mongodb.net/voorbeelddb?retryWrites=true&w=majority"
-}
